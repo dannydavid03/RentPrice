@@ -1,0 +1,318 @@
+---
+title: "Project: Rent Prices by Region"
+subtitle: "**Aamuktha**, Kobe, Aman, Daniel, Brendon"
+output: html_document
+date: "2022-12-05"
+---
+
+> **INTRODUCTION:** 
+> Due to the current housing crisis sweeping not only Madison, but the nation itself, we wanted to investigate deeper into what the housing market looked like over the past 2 decades. We will analyze the changes in the housing market by for each region of the United States, across a time span of 20 years - focusing specifically on 2003, 2008, 2013, 2018, and 2023 as our years of interest. Our main questions are- what region of the United States has been the most expensive overall? And have housing prices seen an abnormally rapid increase between any year in particular, in any region in particular?
+>**Thesis:** 
+>The costs of housing have increased over the past 2 decades across the US, but there are some regions that have been more affected than others by the national housing crisis, especially during certain years.
+>**DATA SET**
+>The data set was compiled from various datasets of the Office of Policy Development and Research for each of the years mentioned above. The data included the rent price for counties across the US, so we grouped it by state (averaging the rent prices of all available counties in the state and obtaining one value), and then grouped again by region doing the same process. Our variables (in the "years" data set) are: state, region, year, and rent. In our data set, we chose to only test 3-bedroom residences, as this is what an average family might reside in. 
+>**SOURCE**
+>Our source was: Office of Policy Development and Research. (n.d.). 50th percentile rent estimates: HUD USER. 50th Percentile Rent Estimates | HUD USER. Retrieved December 5, 2022, from https://www.huduser.gov/portal/datasets/50per.html#2018 . 
+>We included a map below to understand and visualuze the regions of the United States that we were testing with this data. Some unusual factors that must  be acknowledged that will affect the data are the various natural disasters that have taken place in the past 20 years (such as Hurricane Katrina and Hurricane Maria), stock market downturns, as well as the COVID-19 pandemic, since all 3 affect the economy and therefore affect housing costs. We intend to analyze these different datasets by organizing them into separate datasets based on each year (and the rent price of each state that year), and then combining them into a single data set grouping by a new variable, region (the region that each state lies in) and having that "years" data set show the rent price for each state in its respective region for each year. The dataset will be used to create plots depicting the change in rent price and region costs over year, and we will calculate correlation, p-values, variance, and percent change of our variables to answer our questions.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      error = TRUE)
+                
+library(tidyverse)
+library(lubridate)
+library(kableExtra)
+library(readxl)
+library(ggplot2)
+library(maps)
+library(ggridges)
+library(broom)
+library(purrr)
+state = data.frame(state = state.abb, region = state.region, 
+                   state_name = tolower(state.name))
+year_2003 = read_excel("FY2003_50Rents_County.xls") %>% 
+    select(state = State_Alpha, rent_03 = rent50_3) %>% 
+  inner_join(state) %>% 
+  group_by(state, region) %>% 
+    summarize(rent_03 = round(mean(rent_03),2)) %>% 
+  mutate(year_03 = "2003")
+year_2008 = read_excel("FY2008_county_level_50th_r.xls") %>% 
+  select(state = state_alpha, rent_08 = Rent50_3) %>%  
+  inner_join(state) %>% 
+    group_by(state, region) %>% 
+    summarize(rent_08 = round(mean(rent_08),2))%>% 
+  mutate(year_08 = "2008")
+year_2013 = read_excel("FY2013_50_Final.xls")  %>% 
+  select(state = state_alpha, rent_13 = Rent50_3) %>%  
+  inner_join(state) %>% 
+    group_by(state, region) %>% 
+    summarize(rent_13 = round(mean(rent_13),2)) %>% 
+  mutate(year_13 = "2013")
+year_2018 = read_excel("FY2018_50_County_rev.xlsx") %>% 
+  select(state = state_alpha, rent_18 = rent50_3) %>%  
+  inner_join(state) %>% 
+    group_by(state, region) %>% 
+    summarize(rent_18 = round(mean(rent_18),2)) %>% 
+  mutate(year_18 = "2018")
+year_2023 = read_excel("FY2023_FMR_50_county.xlsx") %>% 
+  select(state = state_alpha, rent_23 = rent_50_3) %>%  
+  inner_join(state) %>% 
+    group_by(state, region) %>% 
+    summarize(rent_23 = round(mean(rent_23),2)) %>% 
+  mutate(year_23 = "2023")
+years = year_2023 %>%  full_join(year_2018) %>% full_join(year_2013) %>% full_join(year_2008) %>% full_join(year_2003) %>% 
+  select(state, starts_with("r")) %>% 
+    pivot_longer(
+        cols = starts_with("rent"),
+        names_to = "year",
+        values_to = "rent")
+years[years == "rent_23"] = "2023"
+years[years == "rent_18"] = "2018"
+years[years == "rent_13"] = "2013"
+years[years == "rent_08"] = "2008"
+years[years == "rent_03"] = "2003"
+```
+
+```{r,echo=FALSE}
+us.map = map_data('state')
+us.map$Region[us.map$region %in% 
+                c("alabama","arkansas","delaware","florida","georgia","kentucky",'louisiana','maryland','mississippi','north carolina', 'oklahoma', 'south carolina', 'tennessee', 'texas', 'virginia','west virginia')] = "South"
+us.map$Region[us.map$region %in% 
+          c('alaska','arizona','california','colorado','hawaii','idaho','montana','nevada','new mexico','oregon','utah','washington','wyoming')] = "West"
+us.map$Region[us.map$region %in% 
+          c('connecticut','maine','massachusetts','new hampshire','new jersey','new york', 'pennsylvania','rhode island','vermont','district of columbia')] = "Northeast"
+us.map$Region[us.map$region %in% 
+          c('illinois','indiana','iowa','kansas','michigan','missouri','nebraska','north dakota','ohio','south dakota','wisconsin', 'minnesota')] = "North Central"
+states = aggregate(cbind(long, lat) ~ region, data=us.map, 
+                FUN=function(x)mean(range(x)))
+ggplot(us.map,  aes(x=long, y=lat)) + 
+  geom_polygon(aes(group = group, fill=Region),color = 'black')  +
+  theme_ridges() +
+  ggtitle("US Regions") +
+  theme(panel.background = element_blank(),  
+    panel.grid = element_blank(), 
+    axis.line = element_blank(), 
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank())+
+  coord_map() 
+```
+
+
+```{r, echo = FALSE}
+year_2003 = year_2003 %>%  full_join(state)
+states = map_data("state") %>% mutate(state_name = region)    
+map = merge(states, year_2003, by = "state_name", all.x = T)  
+map_03 = map[order(map$order), ]     
+ggplot(map_03, aes(x = long, y = lat, group = group)) +  
+    geom_polygon(aes(fill = rent_03)) +   
+    geom_path() + 
+    scale_fill_gradientn(colors = rev(heat.colors(10))) +
+    coord_map() +
+    labs(x = "Longitude", y = "Latitude", 
+         title = "Rent Prices by State", 
+         subtitle = "3 Bedrooms in 2003") +
+    guides(fill = guide_legend(title = "Rent Price")) +
+  theme_ridges() +
+  theme(panel.background = element_blank(),  
+    panel.grid = element_blank(), 
+    axis.line = element_blank(), 
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank())
+year_2008 = year_2008 %>%  full_join(state)
+states = map_data("state") %>% mutate(state_name = region)    
+map = merge(states, year_2008, by = "state_name", all.x = T)  
+map_08 = map[order(map$order), ]     
+ggplot(map_08, aes(x = long, y = lat, group = group)) +  
+    geom_polygon(aes(fill = rent_08)) +   
+    geom_path() + 
+    scale_fill_gradientn(colors = rev(heat.colors(10))) +
+    coord_map() +
+    labs(x = "Longitude", y = "Latitude", 
+         title = "Rent Prices by State", 
+         subtitle = "3 Bedrooms in 2008") +
+    guides(fill = guide_legend(title = "Rent Price")) +
+  theme_ridges() +
+  theme(panel.background = element_blank(),  
+    panel.grid = element_blank(), 
+    axis.line = element_blank(), 
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank())
+year_2013 = year_2013 %>%  full_join(state)
+states = map_data("state") %>% mutate(state_name = region)    
+map = merge(states, year_2013, by = "state_name", all.x = T)  
+map_13 = map[order(map$order), ]     
+ggplot(map_13, aes(x = long, y = lat, group = group)) +  
+    geom_polygon(aes(fill = rent_13)) +   
+    geom_path() + 
+    scale_fill_gradientn(colors = rev(heat.colors(10))) +
+    coord_map() +
+    labs(x = "Longitude", y = "Latitude", 
+         title = "Rent Prices by State", 
+         subtitle = "3 Bedrooms in 2013") +
+    guides(fill = guide_legend(title = "Rent Price")) +
+  theme_ridges() +
+  theme(panel.background = element_blank(),  
+    panel.grid = element_blank(), 
+    axis.line = element_blank(), 
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank())
+year_2018 = year_2018 %>%  full_join(state)
+states = map_data("state") %>% mutate(state_name = region)    
+map = merge(states, year_2018, by = "state_name", all.x = T)  
+map_18 = map[order(map$order), ]     
+ggplot(map_18, aes(x = long, y = lat, group = group)) +  
+    geom_polygon(aes(fill = rent_18)) +   
+    geom_path() + 
+    scale_fill_gradientn(colors = rev(heat.colors(10))) +
+    coord_map() +
+    labs(x = "Longitude", y = "Latitude", 
+         title = "Rent Prices by State", 
+         subtitle = "3 Bedrooms in 2018") +
+    guides(fill = guide_legend(title = "Rent Price")) +
+  theme_ridges() +
+  theme(panel.background = element_blank(),  
+    panel.grid = element_blank(), 
+    axis.line = element_blank(), 
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank())
+year_2023 = year_2023 %>%  full_join(state)
+states = map_data("state") %>% mutate(state_name = region)    
+map = merge(states, year_2023, by = "state_name", all.x = T)  
+map_23 = map[order(map$order), ]     
+ggplot(map_23, aes(x = long, y = lat, group = group)) +  
+    geom_polygon(aes(fill = rent_23)) +   
+    geom_path() + 
+    scale_fill_gradientn(colors = rev(heat.colors(10))) +
+    coord_map() +
+    labs(x = "Longitude", y = "Latitude", 
+         title = "Rent Prices by State", 
+         subtitle = "3 Bedrooms in 2023") +
+    guides(fill = guide_legend(title = "Rent Price")) +
+  theme_ridges() +
+  theme(panel.background = element_blank(),  
+    panel.grid = element_blank(), 
+    axis.line = element_blank(), 
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank())  
+```
+
+```{r,echo=FALSE}
+#analysis
+cor = cor ( as.numeric(years$year),years$rent)
+kbl(cor, caption = "Correlation Coefficient: Year vs Rent") %>%  kable_minimal()
+Year = as.numeric(years$year)
+RentPrice = years$rent
+plot (Year, RentPrice)
+```
+
+>**Rent Prices By State**
+>Evident from the series of graphs above, and the key on the side of these graphs, for each year the average rent price percentile estimate tends to increase across all parameters, least, medium, and greatest rents. While there are some subtle differences between each state, this graph is beginning to show us that the most expensive regions seem to remain the most expensive regions throughout. However, we will re-look at this later with more analysis. 
+> **Correlation Coefficient Plot**
+>The general correlation coefficient between the year and rent supports the first assertion as its value of 0.63 is singnificant and close to 1. The plot also trends in an almost perfect linear fashion, which shows us **it is reasonable to assume that rent price increases with the year**.
+```{r,echo=FALSE}
+ggplot(years, aes(x = rent, y = region, fill = region)) +
+    geom_density_ridges() +
+    facet_grid("year") +
+    theme_ridges() +                              
+    theme(legend.position = "none",                  
+          axis.title.x = element_text(hjust = 0.5),  
+          axis.title.y = element_text(hjust = 0.5)) + 
+    labs(x = "Rent Price", y = "Region",  
+         title = "Rent Prices by Region", subtitle = "3 Bedrooms") 
+```
+
+```{r,echo=FALSE}
+#analysis
+t03 = t.test(year_2008$rent_08, year_2003$rent_03) 
+t08 = t.test(year_2013$rent_13, year_2008$rent_08) 
+t13 = t.test(year_2018$rent_18, year_2013$rent_13)
+t18 = t.test(year_2023$rent_23, year_2018$rent_18)
+tab = map_df(list(t03, t08, t13, t18), tidy)
+yr = c("2003-2008", "2008-2013", "2013-2018", "2018-2023")
+tab$year = yr
+tab = tab %>% mutate(Years = year,
+           PValue =  round(p.value,4), Low =round(conf.low,2), High = round(conf.high,2)) %>%  select(Years, PValue, Low, High)
+kbl(tab, caption = "Welch Two Sample T-Test of the Rent Price by Year: 95% Confidence Interval") %>% kable_styling()
+```
+
+> **Rent Prices by Region**
+>This graph shows the densities of all the regions shifting to the right, showing that across all the regions of the US, the rent was increasing, even if to a varying degree (more of which will be analyzed later). The t-test table shows the p-value for each period of years and low and high values for the confidence interval are also labeled.
+> **T-test Table**
+>Additionally, a t-test was performed for each of the 4 time periods we have data for. All the p-values were less than 0.05 if using a 95% confidence interval, indicting that they are all statistically significant (when comapared to the null hypothesis that the change in means from year to year is not statistically significant).For 2008-2013, there was the greatest p-value of 0.03, **indicting that this time period had the LEAST significant relationship between the change in rent price and year**. In contrast, 2018-2023 had the smallest p-value of 0.0003 **showing that there was a MORE significant relationship between the change in rent price and year**. We can use these p-values to predict which time period will have the greatest and least percent change.
+
+```{r,echo=FALSE}
+ggplot(years,aes(year, rent)) + geom_boxplot() + 
+    theme_ridges() +
+    labs(x = "Year",  y = "Rent Price",
+         title = "Rent Prices by Year", subtitle = "3 Bedrooms") 
+```
+
+```{r,echo=FALSE}
+#analysis
+pct_change_2008 = round((((854)-(709))/ 709) * 100, 2)
+pct_change_2013 = round((((972)-(854))/ 854) * 100, 2)
+pct_change_2018 = round((((1108)-(972))/ 972) * 100, 2)
+pct_change_2023 = round((((1364)-(1108))/ 1108) * 100, 2)
+pct = c("NA", pct_change_2008, pct_change_2013, pct_change_2018, pct_change_2023)
+years_compact = years %>% ungroup%>% select (-region, -state, Year = year, Rent = rent) %>%arrange(desc(Year))  %>%  group_by (Year) %>%  mutate (Total_Rent = sum(Rent), Median = round(median(Rent),2), Variance = round(var(Rent),0)) %>% slice_tail() %>% ungroup %>%  select(-Rent, -Total_Rent)
+years_compact$PercentChange = pct
+kbl(years_compact, caption = "Median, Variance, and Percent Change of Total Rent Prices") %>% kable_styling()
+```
+
+>We can determine that the median rent price across each year averaged from all the counties across the US has increased steadily. According to the table above, the greatest percent change was between 2018-2023, and the least was between 2008-2013, as we expected based on our p-value calculations.
+
+```{r,echo=FALSE}
+ggplot(years,aes(rent,region)) + geom_boxplot() + facet_grid(vars(year)) +
+    theme_ridges() +
+    labs(x = "Rent Price", y = "Region",  
+         title = "Rent Prices by Region", subtitle = "3 Bedrooms") 
+```
+
+```{r,echo=FALSE}
+#analysis
+years_compact_region = years %>% 
+  ungroup() %>% 
+  select (-state) %>%
+  group_by (region, year) %>% 
+  mutate (total_rent = sum(rent), median = median(rent), var = var(rent)) %>% 
+  select (-rent)
+```
+
+```{r,echo=FALSE}
+# percent changes from 2003 -> 2023
+pct_ne = round(((1896.270-995.500)/995.500) * 100, 2)
+pct_s = round(((1286.225-653.740)/653.740) * 100,2)
+pct_nc = round(((1219.550-672.470)/672.470) * 100,2)
+pct_w = round(((1780.690-866.490)/866.490) * 100,2)
+pct_region = data.frame(Northeast = pct_ne, South = pct_s, NorthCentral = pct_nc, West = pct_w)
+kbl(pct_region, caption = "Percent Change of Rent Price by Region from 2003 to 2023") %>% kable_styling()
+# percent changes from 2018 -> 2023
+pct_ne_a = round(((1896.270-1436.460)/1436.460) * 100,2)
+pct_s_a = round(((1286.225-1077.380)/1077.380) * 100,2)
+pct_nc_a = round(((1219.550-1038.485)/1038.485) * 100,2)
+pct_w_a = round(((1780.690-1306.650)/1306.650) * 100,2)
+pct_region2 = data.frame(Northeast = pct_ne_a, South = pct_s_a, NorthCentral = pct_nc_a, West = pct_w_a)
+kbl(pct_region2, caption = "Percent Change of Rent Price by Region from 2018 to 2023") %>% kable_styling()
+```
+
+> The GREATEST percent change from 2003 -> 2023 was in the West with a magnitude of 105.51%. The LEAST percent change was in the North Central region: 81.35% (The South was the 2nd greatest, followed by the Northeast)
+> Similar to above, West led with: 36.28% and North Central lagged with: 17.44% (However, this time the Northeast was the 2nd greatest while the South followed). The significance of testing this specific time period is that this was the period of greatest change in rent price across the US.
+
+```{r,echo=FALSE}
+ggplot(years,aes(year, rent)) + geom_boxplot() + facet_wrap(vars(region)) + 
+    theme_ridges() +
+    labs(x = "Year", y = "Rent Price",  
+         title = "Rent Prices by Year and Region", subtitle = "3 Bedrooms")  
+```
+
+> As evidenced by the box plot, the Northeast region consistently had the greatest mean rent across these time periods. However, it did not have the greatest percent change from the periods we test. In fact, the West had the greatest percent change from both 2018-2023, and 2003-2023. This trend makes sense, as the West's housing prices grow the greatest amount, even visually, starting out near the other 2 regions' prices in 2003 (South and North Central), and surpassing them to rival the Northeast in 2023. The West also had the greatest variance in 2023 (the year of greatest variance in the US), which could support that its housing market has grown the fastest. It is also visually obvious that NC had the least percent change both across the 2 decade period and within the last 5 years; it consistently had the cheapest rent prices, and the least variance. The most expensive year in the US overall (to date) will be 2023, while the cheapest will be 2003. The greatest change in housing costs ocurred in the just the past 5 years, which explains the current housing crisis. To answer our final questions: the Northeast has always been the most expensive region, and the West follows it, consistently having been the 2nd most expensive region, but progressively getting more and more expensive with each decade. North Central has consistently hosted the cheapest rent prices. And an abnormal increase in rent prices was seen between 2018-2023.
+
+>This could be due to the covid pandemic and the increasing rate of economic inflation. It could also be due to earlier natural disasters such as the CA wildfires or Hurricane Maria. Even international disasters and the international economy could play a significant role in the US economy (ex. 2018 Indonesian tsunami & earthquake). There was also a significant change from 2003-2008 (about 5% less than 2013-2018), which the economic downturn of 2002 could have played a role in. 
+>Some shortcoming of this analysis are that we don't know what the cause of the increasing rent prices between years are, we can only speculate. For instance, we don't know the inflation or per capita wage rate changes over there years, and if those changes paralleled the change in housing costs then our conclusion about the cause of the housing crisis being the rapid rate of increase of housing costs in some regions would be inaccurate. We also look at regions as a whole, but there might be some states, like NY or CA in their respective regions that have a greater influence than other states due to a larger population and pricier residences, which can be misleading when analyzing the entire region.In the future we could consider looking at more specific time periods and comparing them to the economic affectors of that time (such as percent change in inflation rates versus percent change in housing costs), so we could get an idea of the correlation between an event and the change in housing prices. We could also look at individual states instead of regions. Due to the percent changes derived from the medians of the regions across the US for these different years, we determined that the Northeast is the most expensive region to live, the North Central is the least expensive region to live in, and the housing costs abnormally fluctuated the most between 2019-2023. However, the housing market has shown the greatest abnormal growth in the west, and the least growth in North Central.
